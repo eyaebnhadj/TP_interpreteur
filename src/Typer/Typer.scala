@@ -10,12 +10,8 @@ object Typer :
     case BinaryExp(op, exp1, exp2) =>
       val t1 = eval(exp1, e)
       val t2 = eval(exp2, e)
-
-  // Vérifier que t1 est int
       if !(t1 === INT) then
         throw TypingException(s"Expected int, got $t1 in $exp1")
-
-      // Vérifier que t2 est int
       if !(t2 === INT) then
         throw TypingException(s"Expected int, got $t2 in $exp2")
 
@@ -30,4 +26,12 @@ object Typer :
         throw TypingException(s"Branches have different types: $tZero and $tNonZero")
 
       tZero
+    case Var(name) =>
+        e.getOrElse(name, throw TypingException(s"Variable $name not defined"))
+
+      // Let : let x = u in v
+    case Let(name, u, v) =>
+      val tu = eval(u, e)
+      val newEnv = e + (name -> tu)
+      eval(v, newEnv)
     case _ => ???
