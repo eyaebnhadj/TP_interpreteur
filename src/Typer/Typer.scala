@@ -34,4 +34,20 @@ object Typer :
       val tu = eval(u, e)
       val newEnv = e + (name -> tu)
       eval(v, newEnv)
+
+    case Fun(param, body) =>
+      val tParam = unify.TVar()              
+      val newEnv = e + (param -> tParam)     
+      val tBody = eval(body, newEnv)         
+      FUNCTION(tParam, tBody)                
+
+    case App(t1, t2) =>
+        val tFunc = eval(t1, e)                
+        val tArg = eval(t2, e)                 
+        val tResult = unify.TVar()             
+        val expectedFunc = FUNCTION(tArg, tResult)
+        if !(tFunc === expectedFunc) then
+          throw TypingException(s"Type mismatch: expected function $expectedFunc, got $tFunc")
+
+        tResult
     case _ => ???
