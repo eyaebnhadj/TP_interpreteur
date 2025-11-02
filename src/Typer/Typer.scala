@@ -29,25 +29,33 @@ object Typer :
     case Var(name) =>
         e.getOrElse(name, throw TypingException(s"Variable $name not defined"))
 
-      // Let : let x = u in v
     case Let(name, u, v) =>
       val tu = eval(u, e)
       val newEnv = e + (name -> tu)
       eval(v, newEnv)
 
     case Fun(param, body) =>
-      val tParam = unify.TVar()              
-      val newEnv = e + (param -> tParam)     
-      val tBody = eval(body, newEnv)         
-      FUNCTION(tParam, tBody)                
+      val tParam = unify.TVar()
+      val newEnv = e + (param -> tParam)
+      val tBody = eval(body, newEnv)
+      FUNCTION(tParam, tBody)
 
     case App(t1, t2) =>
-        val tFunc = eval(t1, e)                
-        val tArg = eval(t2, e)                 
-        val tResult = unify.TVar()             
+        val tFunc = eval(t1, e)
+        val tArg = eval(t2, e)
+        val tResult = unify.TVar()
         val expectedFunc = FUNCTION(tArg, tResult)
         if !(tFunc === expectedFunc) then
           throw TypingException(s"Type mismatch: expected function $expectedFunc, got $tFunc")
 
         tResult
+    case Fix(f, body) =>
+      val tf = unify.TVar()
+      val newEnv = e + (f -> tf)
+      val tBody = eval(body, newEnv)
+      if !(tBody === tf) then
+        throw TypingException(s"Fix: body has type $tBody, but $f has type $tf")
+
+      tf
+
     case _ => ???

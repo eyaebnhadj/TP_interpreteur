@@ -1,7 +1,8 @@
 package pcf
 
-import evaluator.Evaluator
+import evaluator.{EvaluationException, Evaluator}
 import evaluator.Evaluator.eval
+import typer.TypingException
 //import lexer.Lexer
 //import parser.Parser
 //import parser.AbstractParser
@@ -23,12 +24,17 @@ object PCF:
 //    if token != lexer.Token.EOF then
 //      throw new Exception(s"Unexpected token $token after parsing complete expression $exp")
 //
-
+//    val term = AbstractParser.analyze(in)
+//    println(s"==> ${eval(term, Map())}")
+//    val typ = Typer.eval(term, Map())
+//    println(s"Type: $typ")
+//    val result = Evaluator.eval(term, Map())
+//    println(s"==> $result: $typ")
     val term = AbstractParser.analyze(in)
-    println(s"==> ${eval(term, Map())}")
-    val typ = Typer.eval(term, Map())
+    val typ = Typer.eval(term, Map.empty)
     println(s"Type: $typ")
-    val result = Evaluator.eval(term, Map()) 
-    println(s"==> $result: $typ") 
+    val result = Evaluator.eval(term, Map.empty)
+    println(s"Result: $result :: $typ")
+
 
 
