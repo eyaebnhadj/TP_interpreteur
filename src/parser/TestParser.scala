@@ -1,6 +1,7 @@
-package parser
+package parserANTLRv2
 
-import lexer.Lexer
+import evaluator.Evaluator
+import evaluator.Evaluator.Env
 
 import java.io.{FileInputStream, InputStream}
 
@@ -11,9 +12,9 @@ def main(args: String*): Unit =
       System.in
     else
       FileInputStream(args(0))
-  Lexer(in)
-  val exp = Parser.parse(Lexer.nextToken())
-  val token = Lexer.nextToken()
-  if token != lexer.Token.EOF then
-    throw new Exception(s"Unexpected token $token after parsing complete expression $exp")
-  else println(exp)
+  val concreteTree = ConcreteParser.analyze(in)
+  val visitor = new ASTVisitor
+  val abstractTree = visitor.visit(concreteTree).asInstanceOf[ast.Term]
+  println(abstractTree)
+  val result = Evaluator.eval(abstractTree, Map.empty: Env)
+  println(s"Result: $result")

@@ -1,16 +1,15 @@
-package parser
+package parserANTLRv2
+
+import ast.Term
 
 import java.io.InputStream
-import ast.Term
-import lexer.Lexer
+import parserANTLRv2.{ASTVisitor, ConcreteParser}
 
 object AbstractParser :
   def analyze(in: InputStream): Term =
-    Lexer(in)
-    val exp = Parser.parse(Lexer.nextToken())
-    val token = Lexer.nextToken()
-    if token != lexer.Token.EOF then
-      throw new Exception(s"Unexpected token $token after parsing complete expression $exp")
-
-
-    else exp
+    val concreteTree = ConcreteParser.analyze(in)
+    val visitor = new ASTVisitor
+    val term = visitor.visit(concreteTree).asInstanceOf[Term]
+    println(s"ASR: $term")
+    term
+ 
