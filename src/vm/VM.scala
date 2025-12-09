@@ -1,152 +1,103 @@
 package vm
 
-import ast.Term
-import ast.Term.*
-import evaluator.Value.*
-import evaluator.Evaluator
+import generator.Ins
+import generator.Ins.*
+import scala.annotation.tailrec
+
+// Définition des valeurs possibles dans la VM
+enum Value:
+case IntVal(n: Int)
+case Closure(code: List[Ins], env: List[Value])
+case RecClosure(code: List[Ins], var env: List[Value]) // Pour la piste noire (mutable)
+
+// L'environnement est simplement une liste de valeurs (correspondant aux indices De Bruijn)
+type Env = List[Value]
+
+// La pile peut contenir des valeurs ou des environnements sauvegardés (pour Let)
+// Note: Dans cette implémentation simplifiée, on gère l'environnement courant 'e'
+// séparément et on le met à jour via Let/EndLet/App.
 
 object VM:
+  import Value.*
 
-  enum Instr:
-    case PUSH(n: Int)
-    case ADD
-    case SUB
-    case MUL
-    case DIV
-    case ACCESS(i: Int)       // De Bruijn index access
-    case CLOS(code: List[Instr])
-    case CLOS_REC(code: List[Instr])
-    case APPLY
-    case IFZERO(thenCode: List[Instr], elseCode: List[Instr])
-    case RET
-    case STOP
+  def execute(c: List[Ins]): Value =
+    execute(IntVal(0), List(), List(), c)
 
-  sealed trait RV
-  case class IntV(n: Int) extends RV
-  case class ClosureV(code: List[Instr], var env: List[RV]) extends RV
+  @tailrec
+  def execute(a: Value, s: List[Value], e: Env, c: List[Ins]): Value = (c) match
+  case Nil => a // Fin du code, on retourne l'accumulateur
 
-  // Compile a Term to instructions using De Bruijn indices (ctx: List of bound names)
-  def compile(t: Term): List[Instr] = compile(t, Nil)
+  // --- Piste Verte ---
+  case Ldi(n) :: rest =>
+  execute(IntVal(n), s, e, rest)
 
-  private def idxOf(name: String, ctx: List[String]): Int =
-    ctx.indexOf(name) match
-      case -1 => throw new Exception(s"Unbound variable $name during compilation")
-      case i  => i
+  case Push :: rest =>
+  execute(a, a :: s, e, rest) // Empile l'accumulateur
 
-  private def compile(t: Term, ctx: List[String]): List[Instr] = t match
-    case Number(n) => List(Instr.PUSH(n))
-    case Var(x)    => List(Instr.ACCESS(idxOf(x, ctx)))
-    case BinaryExp(op, a, b) =>
-      val ca = compile(a, ctx)
-      val cb = compile(b, ctx)
-      val opi = op match
-        case ast.Op.Plus  => Instr.ADD
-        case ast.Op.Minus => Instr.SUB
-        case ast.Op.Times => Instr.MUL
-        case ast.Op.Div   => Instr.DIV
-      ca ++ cb ++ List(opi)
-    case IfZero(cond, z, nz) =>
-      val c = compile(cond, ctx)
-      val cz = compile(z, ctx) ++ List(Instr.RET)
-      val cnz = compile(nz, ctx) ++ List(Instr.RET)
-      c ++ List(Instr.IFZERO(cz, cnz))
-    case Let(name, u, v) =>
-      // transform let x = u in v  ==>  (fun x -> v) u
-      compile(App(Fun(name, v), u), ctx)
-    case Fun(name, body) =>
-      val bodyCode = compile(body, name :: ctx) ++ List(Instr.RET)
-      List(Instr.CLOS(bodyCode))
-    case App(t, u) =>
-      compile(t, ctx) ++ compile(u, ctx) ++ List(Instr.APPLY)
-    case Fix(f, body) =>
-      // create a recursive closure: CLOS_REC will create a closure whose env contains itself
-      val bodyCode = compile(body, f :: ctx) ++ List(Instr.RET)
-      List(Instr.CLOS_REC(bodyCode))
+  case (op: (Add.type | Sub.type | Mul.type | Div.type)) :: rest =>
+  val v2 = a match { case IntVal(n) => n; case _ => 0 } // Valeur courante (droite)
+  val v1 = s.head match { case IntVal(n) => n; case _ => 0 } // Valeur dépilée (gauche)
+  val res = op match
+  case Add => v1 + v2
+  case Sub => v1 - v2
+  case Mul => v1 * v2
+  case Div => v1 / v2
+  execute(IntVal(res), s.tail, e, rest)
 
-  // Run a program (list of instructions) and return an RV
-  def run(program: List[Instr]): RV =
-    // execution stacks
-    var stack: List[RV] = Nil
-    var contStack: List[(List[Instr], List[RV])] = Nil // (code, env)
+  case Test(thenC, elseC) :: rest =>
+  val cond = a match { case IntVal(n) => n; case _ => 0 }
+  // On exécute la branche, puis on continue avec 'rest'
+  val branch = if (cond == 0) thenC else elseC
+  execute(a, s, e, branch ::: rest)
 
-    def exec(code: List[Instr], env: List[RV]): RV =
-      var pc = code
-      var currentEnv = env
-      while pc.nonEmpty do
-        pc.head match
-          case Instr.PUSH(n) =>
-            stack = IntV(n) :: stack
-            pc = pc.tail
-          case Instr.ADD =>
-            val a = stack.head.asInstanceOf[IntV]; stack = stack.tail
-            val b = stack.head.asInstanceOf[IntV]; stack = stack.tail
-            stack = IntV(b.n + a.n) :: stack
-            pc = pc.tail
-          case Instr.SUB =>
-            val a = stack.head.asInstanceOf[IntV]; stack = stack.tail
-            val b = stack.head.asInstanceOf[IntV]; stack = stack.tail
-            stack = IntV(b.n - a.n) :: stack
-            pc = pc.tail
-          case Instr.MUL =>
-            val a = stack.head.asInstanceOf[IntV]; stack = stack.tail
-            val b = stack.head.asInstanceOf[IntV]; stack = stack.tail
-            stack = IntV(b.n * a.n) :: stack
-            pc = pc.tail
-          case Instr.DIV =>
-            val a = stack.head.asInstanceOf[IntV]; stack = stack.tail
-            val b = stack.head.asInstanceOf[IntV]; stack = stack.tail
-            stack = IntV(b.n / a.n) :: stack
-            pc = pc.tail
-          case Instr.ACCESS(i) =>
-            // De Bruijn index: 0 => nearest binder
-            if i < currentEnv.length then
-              stack = currentEnv(i) :: stack
-              pc = pc.tail
-            else
-              throw new Exception(s"ACCESS out of bounds: $i env=${currentEnv}")
-          case Instr.CLOS(codeC) =>
-            val clo = ClosureV(codeC, currentEnv)
-            stack = clo :: stack
-            pc = pc.tail
-          case Instr.CLOS_REC(codeC) =>
-            // create closure and insert itself as first element of its env
-            val clo = ClosureV(codeC, Nil)
-            clo.env = clo :: currentEnv
-            stack = clo :: stack
-            pc = pc.tail
-          case Instr.APPLY =>
-            val arg = stack.head; stack = stack.tail
-            val fv = stack.head; stack = stack.tail
-            fv match
-              case ClosureV(codeC, envC) =>
-                // save continuation
-                contStack = (pc.tail, currentEnv) :: contStack
-                // start executing function body with new env (arg :: envC)
-                pc = codeC
-                currentEnv = arg :: envC
-              case _ => throw new Exception(s"Apply on non-function $fv")
-          case Instr.IFZERO(thenCode, elseCode) =>
-            val v = stack.head.asInstanceOf[IntV]; stack = stack.tail
-            if v.n == 0 then
-              // save continuation and run thenCode
-              contStack = (pc.tail, currentEnv) :: contStack
-              pc = thenCode
-            else
-              contStack = (pc.tail, currentEnv) :: contStack
-              pc = elseCode
-          case Instr.RET =>
-            // return: the top of stack is the return value
-            val retv = stack.head; stack = stack.tail
-            contStack match
-              case Nil => return retv
-              case (savedCode, savedEnv) :: rest =>
-                pc = savedCode
-                currentEnv = savedEnv
-                contStack = rest
-                stack = retv :: stack
-          case Instr.STOP =>
-            return stack.head
-      // if we exit loop without RET, return top of stack
-      stack.head
+  // --- Piste Bleue (Variables & Let) ---
+  case Lds(idx) :: rest =>
+  // Accès variable par indice De Bruijn dans l'environnement 'e'
+  execute(e(idx), s, e, rest)
 
-    exec(program, Nil)
+  case Let :: rest =>
+  // 'Let' prend la valeur dans 'a' (résultat de u) et l'ajoute à l'env
+  execute(a, s, a :: e, rest)
+
+  case EndLet :: rest =>
+  // Sortie du scope : on retire la dernière variable ajoutée
+  execute(a, s, e.tail, rest)
+
+  // --- Piste Rouge (Fonctions & App) ---
+  case MkClos(code) :: rest =>
+  // Crée une fermeture capturant l'environnement courant 'e'
+  execute(Closure(code, e), s, e, rest)
+
+  case App :: rest =>
+  // 'a' contient l'argument. Sommet pile 's' contient la Closure.
+  val arg = a
+  val clos = s.head
+  clos match
+  case Closure(code, savedEnv) =>
+  // Appel : On exécute 'code' avec l'env de la closure étendu par l'argument
+  // IMPORTANT: Quand la fonction termine, on doit revenir à 'rest' avec l'ancien 'e'.
+  // Ici, comme c'est une VM récursive terminale simple, on "inline" le code.
+  // Pour gérer le retour correctement dans une VM linéaire, il faudrait une pile de retour (Dump).
+  // Avec cette structure @tailrec sur liste d'instructions, le 'App' est terminal ou nécessite une astuce.
+  // Astuce simple ici : concaténer le code de la closure avec 'rest', mais restaurer l'environnement est dur sans 'Dump'.
+  // => Modification pour supporter l'appel de fonction : appel récursif de VM (non tailrec) ou gestion de continuation.
+  // Pour respecter la structure fournie : On lance une sous-exécution pour la fonction.
+  val res = execute(IntVal(0), List(), arg :: savedEnv, code)
+  execute(res, s.tail, e, rest)
+
+  case rc @ RecClosure(code, _) => // Piste Noire
+  // Pour la récursion, on ajoute la closure elle-même à l'environnement
+  val res = execute(IntVal(0), List(), arg :: (rc :: rc.env), code)
+  execute(res, s.tail, e, rest)
+
+  case _ => throw new Exception("App sur non-fonction")
+
+  // --- Piste Noire (Fix) ---
+  case FixClos(code) :: rest =>
+  // Création d'une closure récursive cyclique
+  val rc = RecClosure(code, e)
+  // Pas besoin de plus, la structure RecClosure gère la cyclicité logique au moment de l'App
+  // (On triche un peu sur la mutabilité ou on l'interprète au moment du App)
+  execute(rc, s, e, rest)
+
+  case _ => throw new Exception(s"Instruction inconnue ou état invalide")
