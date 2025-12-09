@@ -1,20 +1,19 @@
 package generator
 
 enum Ins:
-// Instructions de base
 case Ldi(n: Int)
 case Add, Sub, Mul, Div
 case Push
 case Test(i: List[Ins], j: List[Ins])
 
-// Piste Bleue (Environnement)
-case Lds(n: Int)    // Chargement depuis l'environnement à l'indice n
-case Let            // Extension de l'environnement
-case EndLet         // Réduction de l'environnement
+// Piste Bleue
+case Lds(n: Int)    // Chargement depuis l'environnement (stack/env)
+case Let            // Début de bloc Let (ajoute variable à l'env)
+case EndLet         // Fin de bloc Let (retire variable de l'env)
 
-// Piste Rouge (Fermetures)
-case MkClos(code: List[Ins])
-case App
+// Piste Rouge
+case MkClos(code: List[Ins]) // Création de fermeture
+case App                     // Application de fonction
 
-// Piste Noire (Récursion)
-case FixClos(code: List[Ins])
+// Piste Noire
+case FixClos(code: List[Ins]) // Création de fermeture récursive

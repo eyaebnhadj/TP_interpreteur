@@ -17,7 +17,7 @@ case AFix(name: String, body: ATerm) // Piste Noire
 object ATerm:
   /**
    * Transforme un Term (avec noms) en ATerm (avec indices).
-   * L'appel 1.indexOf(e) donne l'indice de l'élément e de la liste 1.
+   * L'appel l.indexOf(e) donne l'indice de l'élément e de la liste l.
    */
   def annotate(t: Term): ATerm = annotate(t, List())
 

@@ -70,20 +70,12 @@ object VM:
   val clos = s.head.asInstanceOf[Value]
   clos match
   case Closure(code, savedEnv) =>
-  // On sauvegarde l'env courant et le code de retour sur la pile (simplification ici : on inline)
-  // Note : Pour une vraie récursivité terminale, il faudrait une pile de retour (Dump).
-  // Ici, on simule l'appel en réinitialisant une sous-exécution ou en gérant le contexte.
-  // L'approche "simple" demandée dans ce TP implique souvent de changer d'environnement courant :
-  // Env de la fonction = savedEnv + arg.
-  // Il faut aussi sauvegarder l'env de l'appelant.
-  // Cependant, avec cette structure @tailrec plate, gérer le retour "EndApp" est complexe sans instruction dédiée.
-  // Solution souvent attendue : Utiliser une instruction de retour implicite ou relancer execute.
-
+  // On exécute la fermeture avec son environnement étendu par l'argument
   val retVal = execute(IntVal(0), List(), arg :: savedEnv, code)
   execute(retVal, s.tail, e, rest)
 
   case rc @ RecClosure(code, _) =>
-  // Piste Noire : On injecte la closure elle-même dans son environnement
+  // Piste Noire : On injecte la closure elle-même dans son environnement pour la récursion
   val retVal = execute(IntVal(0), List(), arg :: (rc :: rc.env), code)
   execute(retVal, s.tail, e, rest)
 
