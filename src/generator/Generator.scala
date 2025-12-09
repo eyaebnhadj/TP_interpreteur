@@ -9,9 +9,10 @@ import Ins.*
 type Code = List[Ins]
 
 object Generator:
-  // Point d'entrée principal qui annote d'abord le terme
   def gen(term: Term): Code =
+  // Étape 1 : Calcul des indices de De Bruijn
   val aterm = ATerm.annotate(term)
+  // Étape 2 : Génération du code
   genAnnotated(aterm)
 
   def genAnnotated(term: ATerm): Code = term match
@@ -23,27 +24,25 @@ object Generator:
   case AIfZero(cond, z, nz) =>
   genAnnotated(cond) ::: List(Test(genAnnotated(z), genAnnotated(nz)))
 
-  // Piste Bleue : Variables et Let
+  // Piste Bleue
   case AVar(idx, _) =>
-  List(Lds(idx)) // Charge la variable à l'indice de De Bruijn idx
+  List(Lds(idx)) // On charge la variable à l'indice calculé
 
   case ALet(_, u, v) =>
-  // Évalue u, puis Let l'ajoute à l'env, on évalue v, puis EndLet nettoie
+  // u est évalué, le résultat est sur l'accumulateur.
+  // 'Let' transfère l'accumulateur vers l'environnement.
   genAnnotated(u) ::: (Let :: genAnnotated(v)) ::: List(EndLet)
 
-  // Piste Rouge : Fonctions et App
+  // Piste Rouge
   case AFun(_, body) =>
-  // Le corps de la fonction est compilé et encapsulé dans MkClos
-  // Ret n'est pas explicite car la VM s'arrête à la fin de la liste d'instructions
   List(MkClos(genAnnotated(body)))
 
   case AApp(t1, t2) =>
-  // Évalue la fonction (Closure dans l'acc), Push (sauvegarde), Évalue arg (dans acc), App
+  // On prépare la fonction, on la Push, on prépare l'argument, puis App
   genAnnotated(t1) ::: (Push :: genAnnotated(t2)) ::: List(App)
 
-  // Piste Noire : Fix
+  // Piste Noire
   case AFix(_, body) =>
-  // Similaire à Fun mais crée une fermeture récursive
   List(FixClos(genAnnotated(body)))
 
   def gen_op(op: Op) = op match

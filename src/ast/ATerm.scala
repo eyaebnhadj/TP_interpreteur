@@ -15,6 +15,10 @@ case AApp(t1: ATerm, t2: ATerm)
 case AFix(name: String, body: ATerm) // Piste Noire
 
 object ATerm:
+  /**
+   * Transforme un Term (avec noms) en ATerm (avec indices).
+   * L'appel 1.indexOf(e) donne l'indice de l'élément e de la liste 1.
+   */
   def annotate(t: Term): ATerm = annotate(t, List())
 
   private def annotate(t: Term, env: List[String]): ATerm = t match
@@ -23,9 +27,10 @@ object ATerm:
   case Var(name) =>
   val idx = env.indexOf(name)
   if (idx == -1) throw new Exception(s"Variable non définie: $name")
-  AVar(idx, name) // l'indice est la position dans la liste (0 = plus récent)
+  AVar(idx, name)
 
   case Let(name, u, v) =>
+  // Dans v, 'name' est ajouté en tête de l'environnement (indice 0)
   ALet(name, annotate(u, env), annotate(v, name :: env))
 
   case IfZero(cond, z, nz) =>
@@ -35,11 +40,12 @@ object ATerm:
   ABinaryExp(op, annotate(t1, env), annotate(t2, env))
 
   case Fun(name, body) =>
+  // Dans le corps de la fonction, le paramètre est à l'indice 0
   AFun(name, annotate(body, name :: env))
 
   case App(t1, t2) =>
   AApp(annotate(t1, env), annotate(t2, env))
 
-  // Piste Noire : Transformation de Fix en syntaxe abstraite annotée
   case Fix(name, body) =>
+  // Pour la récursion, 'name' doit être visible dans 'body'
   AFix(name, annotate(body, name :: env))

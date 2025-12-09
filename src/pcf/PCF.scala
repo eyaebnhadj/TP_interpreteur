@@ -1,6 +1,6 @@
 package pcf
 
-import evaluator.{Evaluator, Value as EValue}
+import evaluator.Evaluator
 import typer.{Typer, Type}
 import parserANTLRv2.AbstractParser
 import ast.Term
@@ -10,6 +10,7 @@ import java.io.{FileInputStream, InputStream}
 
 object PCF:
   def main(args: Array[String]): Unit =
+  // Récupération du fichier ou stdin
   val in: InputStream =
     if args.isEmpty || (args.length == 1 && args(0) == "-i") then System.in
     else FileInputStream(if args(0) == "-i" then args(1) else args(0))
@@ -17,11 +18,11 @@ object PCF:
   if args.contains("-i") then
     println(s"==> ${interpret(in)}")
   else
-  // Si on compile, on peut aussi tester (optionnel, ou par défaut)
+  // Mode compilation
   val term = AbstractParser.analyze(in)
-  val code = compile(in) // Attention: compile relit le stream, mieux vaut passer 'term'
-  // Pour l'exemple, on affiche juste le code ou on exécute la VM
+  val code = compile(term)
   println(s"Code généré: $code")
+  // Exécution VM pour vérifier le résultat
   println(s"Résultat VM: ${VM.execute(code)}")
 
   def analyze(in: InputStream): (Term, Type) =
@@ -33,15 +34,9 @@ object PCF:
   val value = Evaluator.eval(term, Map())
   s"$value :: $typ"
 
-  // Mise à jour selon Section 2
-  def compile(in: InputStream): Code =
-  // Note: analyze consomme le stream, il faut refaire ou passer le term
-  // Ici on suppose qu'on a le term
-  val term = AbstractParser.analyze(in)
+  def compile(term: Term): Code =
   val code = Generator.gen(term)
-
-  // Vérification automatique (Section 2)
-  // Note: ceci lance une exception si ça échoue
+  // Vérification de cohérence (Section 2)
   if (check(term, code)) code
   else throw new Exception("Implementation Error: VM result != Evaluator result")
 
@@ -49,8 +44,7 @@ object PCF:
     try
   val evalVal = Evaluator.eval(term, Map())
   val vmVal = VM.execute(code)
-
-  // Conversion simple pour comparer (les closures peuvent différer en représentation interne)
+  // Comparaison simple via toString pour éviter les problèmes de structure interne des closures
   val res = evalVal.toString == vmVal.toString
   if (!res) println(s"Check failed: Eval=$evalVal vs VM=$vmVal")
   res
